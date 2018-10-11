@@ -76,7 +76,7 @@ private slots:
 
         fakeFolder.syncEngine().setLocalDiscoveryOptions(
             LocalDiscoveryStyle::DatabaseAndFilesystem,
-            { "A/X", "foo bar space/touch", "foo/", "zzz" });
+            { "A/X", "A/X/beta", "foo bar space/touch", "foo/", "zzz", "zzzz" });
 
         QVERIFY(engine.shouldDiscoverLocally(""));
         QVERIFY(engine.shouldDiscoverLocally("A"));
@@ -84,11 +84,16 @@ private slots:
         QVERIFY(!engine.shouldDiscoverLocally("B"));
         QVERIFY(!engine.shouldDiscoverLocally("A B"));
         QVERIFY(!engine.shouldDiscoverLocally("B/X"));
-        QVERIFY(!engine.shouldDiscoverLocally("A/X/Y"));
         QVERIFY(engine.shouldDiscoverLocally("foo bar space"));
         QVERIFY(engine.shouldDiscoverLocally("foo"));
         QVERIFY(!engine.shouldDiscoverLocally("foo bar"));
         QVERIFY(!engine.shouldDiscoverLocally("foo bar/touch"));
+        // These are within "A/X" so they should be discovered
+        QVERIFY(engine.shouldDiscoverLocally("A/X/alpha"));
+        QVERIFY(engine.shouldDiscoverLocally("A/X/Y"));
+        QVERIFY(!engine.shouldDiscoverLocally("A/X o"));
+        QVERIFY(engine.shouldDiscoverLocally("zzzz/hello"));
+        QVERIFY(!engine.shouldDiscoverLocally("zzza/hello"));
 
         fakeFolder.syncEngine().setLocalDiscoveryOptions(
             LocalDiscoveryStyle::DatabaseAndFilesystem,
@@ -149,6 +154,29 @@ private slots:
         QVERIFY(fakeFolder.currentRemoteState().find("A/a4"));
         QVERIFY(tracker.localDiscoveryPaths().empty());
     }
+
+    void testDirectoryAndSubDirectory()
+    {
+        FakeFolder fakeFolder{ FileInfo::A12_B12_C12_S12() };
+
+        fakeFolder.localModifier().mkdir("A/newDir");
+        fakeFolder.localModifier().mkdir("A/newDir/subDir");
+        fakeFolder.localModifier().insert("A/newDir/subDir/file", 10);
+
+        auto expectedState = fakeFolder.currentLocalState();
+
+        // Only "A" was modified according to the file system tracker
+        fakeFolder.syncEngine().setLocalDiscoveryOptions(
+            LocalDiscoveryStyle::DatabaseAndFilesystem,
+            { "A" });
+
+        QVERIFY(fakeFolder.syncOnce());
+
+        QCOMPARE(fakeFolder.currentLocalState(), expectedState);
+        QCOMPARE(fakeFolder.currentRemoteState(), expectedState);
+    }
+
+
 };
 
 QTEST_GUILESS_MAIN(TestLocalDiscovery)

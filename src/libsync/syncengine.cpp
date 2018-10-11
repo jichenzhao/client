@@ -1642,6 +1642,18 @@ void SyncEngine::setLocalDiscoveryOptions(LocalDiscoveryStyle style, std::set<QB
 {
     _localDiscoveryStyle = style;
     _localDiscoveryPaths = std::move(paths);
+
+    // Normalize to make sure that no path is a prefix of another
+    QByteArray prev;
+    auto it = _localDiscoveryPaths.begin();
+    while(it != _localDiscoveryPaths.end()) {
+        if (!prev.isNull() && it->startsWith(prev) && (prev.endsWith('/') || *it == prev || it->at(prev.size()) == '/')) {
+            it = _localDiscoveryPaths.erase(it);
+        } else {
+            prev = *it;
+            ++it;
+        }
+    }
 }
 
 bool SyncEngine::shouldDiscoverLocally(const QByteArray &path) const
@@ -1650,8 +1662,13 @@ bool SyncEngine::shouldDiscoverLocally(const QByteArray &path) const
         return true;
 
     auto it = _localDiscoveryPaths.lower_bound(path);
-    if (it == _localDiscoveryPaths.end() || !it->startsWith(path))
+    if (it == _localDiscoveryPaths.end() || !it->startsWith(path)) {
+        if (it != _localDiscoveryPaths.begin() && path.startsWith(*(--it))) {
+            // Search to find out if there is a prefix (i.e: path is "A/X/foo/bar, and "A/X" is in the set)
+            return it->endsWith('/') || path.at(it->size()) == '/';
+        }
         return false;
+    }
 
     // maybe an exact match or an empty path?
     if (it->size() == path.size() || path.isEmpty())
